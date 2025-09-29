@@ -20,6 +20,7 @@ Finally, you can build all apps into a `/build` folder (each domain in its own f
 
 ## 📂 Project Structure
 
+```bash
 project-root/
 ├─ generate_csv.js # creates websites.csv
 ├─ copy_csv_to_apps.js # copies websites.csv → each app/public
@@ -30,9 +31,11 @@ project-root/
 │ ├─ app-techhubbd/
 │ └─ app-bookbazaar/
 └─ build/ # final builds (after node build-all.js)
+```
 
-yaml
+```yaml
 Copy code
+```
 
 ---
 
