@@ -1,58 +1,86 @@
-import React, { useEffect, useState } from 'react';
-import Heading from './components/Heading';
-import Contact from './components/Contact';
+import React, { useEffect, useState } from "react";
 
 function parseCSV(text) {
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  if (lines.length === 0) return [];
-  const headerLine = lines.shift();
-  const headers = headerLine.split(',').map(h => h.trim());
-
-  return lines.map(line => {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const headers = lines.shift().split(",");
+  return lines.map((line) => {
+    let cur = "",
+      insideQuotes = false;
     const values = [];
-    let cur = '';
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"' ) { inQuotes = !inQuotes; continue; }
-      if (ch === ',' && !inQuotes) { values.push(cur); cur = ''; }
-      else cur += ch;
+    for (let ch of line) {
+      if (ch === '"') {
+        insideQuotes = !insideQuotes;
+        continue;
+      }
+      if (ch === "," && !insideQuotes) {
+        values.push(cur);
+        cur = "";
+      } else cur += ch;
     }
     values.push(cur);
     const obj = {};
-    headers.forEach((h, idx) => { obj[h] = (values[idx] || '').trim(); });
+    headers.forEach((h, i) => (obj[h] = (values[i] || "").trim()));
     return obj;
   });
 }
 
+function Hero({ title, description }) {
+  return (
+    <header
+      style={{ padding: "20px", background: "#f9f9ff", textAlign: "center" }}
+    >
+      <h1>{title}</h1>
+      <p>{description}</p>
+    </header>
+  );
+}
+
+function Contact({ phone, address }) {
+  return (
+    <section style={{ padding: "20px", borderTop: "1px solid #eee" }}>
+      <h3>Contact</h3>
+      <p>📞 {phone}</p>
+      <p>📍 {address}</p>
+    </section>
+  );
+}
+
 export default function App() {
   const [site, setSite] = useState(null);
+
   useEffect(() => {
-    fetch('/websites.csv')
-      .then(r => r.text())
-      .then(text => {
-        const parsed = parseCSV(text);
-        // get target domain from env
+    fetch("/websites.csv")
+      .then((r) => r.text())
+      .then((txt) => {
+        const allSites = parseCSV(txt);
         const target = process.env.REACT_APP_TARGET_DOMAIN;
-        let sel;
         if (target) {
-          sel = parsed.find(p => p.domain === target);
+          setSite(allSites.find((s) => s.domain === target));
+        } else {
+          setSite(allSites[0]); // dev mode → just first site
         }
-        // fallback: if target not set, use first record
-        if (!sel && parsed.length > 0) sel = parsed[0];
-        setSite(sel || null);
-      })
-      .catch(err => {
-        console.error('CSV fetch/parse error:', err);
       });
   }, []);
 
-  if (!site) return <div style={{padding:20}}>Loading...</div>;
+  if (!site) return <p>Loading...</p>;
 
   return (
-    <div style={{ fontFamily: 'Arial, sans-serif', maxWidth:800, margin:'0 auto' }}>
-      <Heading title={site.title} description={site.description} />
+    <div>
+      <Hero title={site.title} description={site.description} />
       <Contact phone={site.phone} address={site.address} />
+      <footer
+        style={{
+          padding: "10px",
+          textAlign: "right",
+          fontSize: "12px",
+          color: "#555",
+        }}
+      >
+        {site.domain}
+      </footer>
     </div>
   );
 }

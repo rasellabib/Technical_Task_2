@@ -1,36 +1,72 @@
 // build-all.js
-const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
+const { execSync } = require("child_process");
 
-const apps = [
-  { dir: 'apps/app-foodexpress', domain: 'foodexpress.com' },
-  { dir: 'apps/app-techhubbd', domain: 'techhubbd.com' },
-  { dir: 'apps/app-bookbazaar', domain: 'bookbazaar.com' }
-];
-
-function copyRecursiveSync(src, dest) {
-  const exists = fs.existsSync(src);
-  const stats = exists ? fs.statSync(src) : null;
-  if (!exists) return;
-  if (stats.isDirectory()) {
-    fs.mkdirSync(dest, { recursive: true });
-    fs.readdirSync(src).forEach(child => {
-      copyRecursiveSync(path.join(src, child), path.join(dest, child));
-    });
-  } else {
-    fs.copyFileSync(src, dest);
-  }
+function parseCSV(text) {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const headers = lines.shift().split(",");
+  return lines.map((line) => {
+    let cur = "",
+      insideQuotes = false;
+    const values = [];
+    for (let ch of line) {
+      if (ch === '"') {
+        insideQuotes = !insideQuotes;
+        continue;
+      }
+      if (ch === "," && !insideQuotes) {
+        values.push(cur);
+        cur = "";
+      } else cur += ch;
+    }
+    values.push(cur);
+    const obj = {};
+    headers.forEach((h, i) => (obj[h] = (values[i] || "").trim()));
+    return obj;
+  });
 }
 
-apps.forEach(a => {
-  console.log('Building:', a.dir);
-  execSync('npm run build', { cwd: a.dir, stdio: 'inherit' });
+const csv = fs.readFileSync("websites.csv", "utf8");
+const sites = parseCSV(csv);
 
-  const buildSrc = path.join(a.dir, 'build');
-  const buildDest = path.join(process.cwd(), 'build', a.domain);
-  // remove old
-  fs.rmSync(buildDest, { recursive: true, force: true });
-  copyRecursiveSync(buildSrc, buildDest);
-  console.log('Copied build to', buildDest);
-});
+for (const site of sites) {
+  console.log(`\n=== Building for ${site.domain} ===`);
+
+  // 1) write .env file dynamically
+  fs.writeFileSync(".env", `REACT_APP_TARGET_DOMAIN=${site.domain}\n`);
+
+  // 2) run react build
+  execSync("npm run build", { cwd: __dirname, stdio: "inherit" });
+
+  // 3) copy to /build/<domain>
+  const src = path.join(process.cwd(), "build");
+  const dest = path.join(process.cwd(), "build", site.domain);
+
+  fs.rmSync(dest, { recursive: true, force: true });
+  fs.mkdirSync(dest, { recursive: true });
+
+  // copy all files
+  function copyRecursive(srcDir, destDir) {
+    for (const file of fs.readdirSync(srcDir)) {
+      const srcFile = path.join(srcDir, file);
+      const destFile = path.join(destDir, file);
+      if (fs.statSync(srcFile).isDirectory()) {
+        fs.mkdirSync(destFile, { recursive: true });
+        copyRecursive(srcFile, destFile);
+      } else {
+        fs.copyFileSync(srcFile, destFile);
+      }
+    }
+  }
+  copyRecursive(src, dest);
+
+  console.log(`✔ Built site at build/${site.domain}`);
+}
+
+// cleanup .env
+fs.rmSync(".env");
+console.log("\n✅ All sites built successfully!");
